@@ -32,6 +32,11 @@ static bool xlib_check_visible(struct ra_ctx *ctx)
     return vo_x11_check_visible(ctx->vo);
 }
 
+static bool xlib_set_color(struct ra_ctx *ctx, struct mp_image_params *params)
+{
+    return vo_x11_set_color(ctx->vo, params);
+}
+
 static void xlib_vk_swap_buffers(struct ra_ctx *ctx)
 {
     if (ctx->vo->x11->use_present)
@@ -66,7 +71,9 @@ static bool xlib_init(struct ra_ctx *ctx)
     if (!vo_x11_init(ctx->vo))
         goto error;
 
-    if (!vo_x11_create_vo_window(ctx->vo, NULL, "mpvk"))
+    XVisualInfo vis;
+    bool deep = vo_x11_match_10bit_visual(ctx->vo, &vis);
+    if (!vo_x11_create_vo_window(ctx->vo, deep ? &vis : NULL, "mpvk"))
         goto error;
 
     VkXlibSurfaceCreateInfoKHR xinfo = {
@@ -77,6 +84,7 @@ static bool xlib_init(struct ra_ctx *ctx)
 
     struct ra_ctx_params params = {
         .check_visible = xlib_check_visible,
+        .set_color = xlib_set_color,
         .swap_buffers = xlib_vk_swap_buffers,
         .get_vsync = xlib_vk_get_vsync,
     };

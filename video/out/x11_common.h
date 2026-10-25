@@ -25,6 +25,8 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 
+#include <libplacebo/colorspace.h>
+
 #include "common/common.h"
 
 #include "config.h"
@@ -34,6 +36,7 @@
 
 struct vo;
 struct mp_log;
+struct mp_image_params;
 
 #define MAX_DISPLAYS 32 // ought to be enough for everyone
 
@@ -42,6 +45,7 @@ struct xrandr_display {
     double fps;
     char *name;
     bool overlaps;
+    bool hdr;
     int atom_id; // offset by location of primary
     int screen;
 };
@@ -57,6 +61,7 @@ struct vo_x11_state {
     Window window;
     Window rootwin;
     Window parent;  // embedded in this foreign window
+    int window_depth;
     int screen;
     int display_is_local;
     int ws_width;
@@ -136,6 +141,7 @@ struct vo_x11_state {
     Window dnd_src_window;
 
     Atom icc_profile_property;
+    struct pl_color_space hdr_color;
 
     XEvent last_button_event;
 };
@@ -144,10 +150,12 @@ bool vo_x11_init(struct vo *vo);
 void vo_x11_uninit(struct vo *vo);
 void vo_x11_check_events(struct vo *vo);
 bool vo_x11_screen_is_composited(struct vo *vo);
+bool vo_x11_match_10bit_visual(struct vo *vo, XVisualInfo *vis);
 bool vo_x11_create_vo_window(struct vo *vo, XVisualInfo *vis,
                              const char *classname);
 void vo_x11_config_vo_window(struct vo *vo);
 bool vo_x11_check_visible(struct vo *vo);
+bool vo_x11_set_color(struct vo *vo, struct mp_image_params *params);
 int vo_x11_control(struct vo *vo, int *events, int request, void *arg);
 void vo_x11_present(struct vo *vo);
 void vo_x11_sync_swap(struct vo *vo);

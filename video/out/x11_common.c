@@ -57,6 +57,10 @@
 #include "x11_common.h"
 #include "mpv_talloc.h"
 
+#if HAVE_DRM
+#include "drm_common.h"
+#endif
+
 #include "vo.h"
 #include "win_state.h"
 #include "osdep/io.h"
@@ -407,6 +411,35 @@ static void xpresent_set(struct vo_x11_state *x11)
     }
 }
 
+static bool xrandr_output_flag(struct vo_x11_state *x11, RROutput output,
+                               const char *name)
+{
+    Atom property = XInternAtom(x11->display, name, True);
+    Atom type;
+    int format;
+    unsigned long nitems, bytes_after;
+    unsigned char *data = NULL;
+    bool enabled = false;
+
+    if (property == None)
+        return false;
+
+    if (XRRGetOutputProperty(x11->display, output, property, 0, 1, False, False,
+                             AnyPropertyType, &type, &format, &nitems,
+                             &bytes_after, &data) == Success &&
+        type == XA_INTEGER && format == 32 && nitems == 1)
+        enabled = *(long *)data == 1;
+
+    XFree(data);
+    return enabled;
+}
+
+static bool xrandr_output_hdr_enabled(struct vo_x11_state *x11, RROutput output)
+{
+    return xrandr_output_flag(x11, output, "HDR") &&
+           xrandr_output_flag(x11, output, "HDR capable");
+}
+
 static void xrandr_read(struct vo_x11_state *x11)
 {
     for(int i = 0; i < x11->num_displays; i++)
@@ -422,7 +455,8 @@ static void xrandr_read(struct vo_x11_state *x11)
         }
         x11->xrandr_event = event_base + RRNotify;
         XRRSelectInput(x11->display, x11->rootwin, RRScreenChangeNotifyMask |
-                       RRCrtcChangeNotifyMask | RROutputChangeNotifyMask);
+                       RRCrtcChangeNotifyMask | RROutputChangeNotifyMask |
+                       RROutputPropertyNotifyMask);
     }
 
     XRRScreenResources *r = XRRGetScreenResourcesCurrent(x11->display, x11->rootwin);
@@ -481,10 +515,12 @@ static void xrandr_read(struct vo_x11_state *x11)
                             crtc->x + crtc->width, crtc->y + crtc->height },
                     .fps = m.dotClock / (m.hTotal * vTotal),
                     .name = talloc_strdup(x11, out->name),
+                    .hdr = xrandr_output_hdr_enabled(x11, output),
                 };
                 int num = x11->num_displays++;
-                MP_VERBOSE(x11, "Display %d (%s): [%d, %d, %d, %d] @ %f FPS\n",
-                           num, d.name, d.rc.x0, d.rc.y0, d.rc.x1, d.rc.y1, d.fps);
+                MP_VERBOSE(x11, "Display %d (%s): [%d, %d, %d, %d] @ %f FPS%s\n",
+                           num, d.name, d.rc.x0, d.rc.y0, d.rc.x1, d.rc.y1, d.fps,
+                           d.hdr ? ", HDR" : "");
                 x11->displays[num] = d;
                 if (output == primary)
                     primary_id = num;
@@ -1616,6 +1652,7 @@ static void vo_x11_create_window(struct vo *vo, XVisualInfo *vis,
     x11->window =
         XCreateWindow(x11->display, parent, rc.x0, rc.y0, RC_W(rc), RC_H(rc), 0,
                       vis->depth, CopyFromParent, vis->visual, xswamask, &xswa);
+    x11->window_depth = vis->depth;
     Atom protos[1] = {XA(x11, WM_DELETE_WINDOW)};
     XSetWMProtocols(x11->display, x11->window, protos, 1);
 
@@ -1768,6 +1805,13 @@ static void wait_until_mapped(struct vo *vo)
         XPeekEvent(x11->display, &unused);
         vo_x11_check_events(vo);
     }
+}
+
+bool vo_x11_match_10bit_visual(struct vo *vo, XVisualInfo *vis)
+{
+    struct vo_x11_state *x11 = vo->x11;
+    return x11->parent != x11->rootwin &&
+           XMatchVisualInfo(x11->display, x11->screen, 30, TrueColor, vis);
 }
 
 // Create the X11 window. There is only 1, and it must be created before
@@ -2083,6 +2127,64 @@ bool vo_x11_check_visible(struct vo *vo)
     struct vo_x11_state *x11 = vo->x11;
     struct mp_vo_opts *opts = x11->opts;
     return !x11->hidden || opts->force_render;
+}
+
+static bool vo_x11_window_on_hdr_displays(struct vo_x11_state *x11)
+{
+    bool on_display = false;
+
+    for (int n = 0; n < x11->num_displays; n++) {
+        if (!rc_overlaps(x11->displays[n].rc, x11->winrc))
+            continue;
+        if (!x11->displays[n].hdr)
+            return false;
+        on_display = true;
+    }
+
+    return on_display;
+}
+
+// The X server applies the hdr_output_metadata window property to the monitor
+// while the window covers it fullscreen and HDR is enabled on the monitor.
+bool vo_x11_set_color(struct vo *vo, struct mp_image_params *params)
+{
+#if HAVE_DRM
+    struct vo_x11_state *x11 = vo->x11;
+    struct pl_color_space color = {0};
+
+    if (params && x11->fs && x11->window_depth == 30 &&
+        pl_color_transfer_is_hdr(params->color.transfer) &&
+        vo_x11_window_on_hdr_displays(x11))
+    {
+        color = params->color;
+        color.primaries = PL_COLOR_PRIM_BT_2020;
+        color.transfer = PL_COLOR_TRC_PQ;
+    }
+
+    if (!pl_color_space_equal(&color, &x11->hdr_color)) {
+        x11->hdr_color = color;
+        if (color.transfer) {
+            struct hdr_output_metadata metadata = vo_drm_hdr_output_metadata(&color);
+            MP_VERBOSE(x11, "Setting hdr_output_metadata: max luminance %g, "
+                       "max cll %g, max fall %g\n", color.hdr.max_luma,
+                       color.hdr.max_cll, color.hdr.max_fall);
+            XChangeProperty(x11->display, x11->window, XA(x11, hdr_output_metadata),
+                            XA_CARDINAL, 8, PropModeReplace,
+                            (unsigned char *)&metadata, sizeof(metadata));
+        } else {
+            MP_VERBOSE(x11, "Removing hdr_output_metadata\n");
+            XDeleteProperty(x11->display, x11->window, XA(x11, hdr_output_metadata));
+        }
+    }
+
+    if (!color.transfer)
+        return false;
+
+    params->color = color;
+    return true;
+#else
+    return false;
+#endif
 }
 
 static void vo_x11_set_input_region(struct vo *vo, bool passthrough)

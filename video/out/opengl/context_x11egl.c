@@ -76,6 +76,11 @@ static bool mpegl_check_visible(struct ra_ctx *ctx)
     return vo_x11_check_visible(ctx->vo);
 }
 
+static bool mpegl_set_color(struct ra_ctx *ctx, struct mp_image_params *params)
+{
+    return vo_x11_set_color(ctx->vo, params);
+}
+
 static void mpegl_swap_buffers(struct ra_ctx *ctx)
 {
     struct priv *p = ctx->priv;
@@ -165,6 +170,7 @@ static bool mpegl_init(struct ra_ctx *ctx)
 
     struct ra_ctx_params params = {
         .check_visible = mpegl_check_visible,
+        .set_color = mpegl_set_color,
         .swap_buffers = mpegl_swap_buffers,
         .get_vsync    = mpegl_get_vsync,
     };

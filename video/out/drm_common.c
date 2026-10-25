@@ -1370,29 +1370,10 @@ double vo_drm_get_display_fps(struct vo_drm_state *drm)
     return mode_get_Hz(&drm->mode.mode);
 }
 
-bool vo_drm_set_color(struct vo *vo, struct pl_color_space *color)
+struct hdr_output_metadata vo_drm_hdr_output_metadata(const struct pl_color_space *color)
 {
-    struct vo_drm_state *drm = vo->drm;
-    if (pl_color_space_equal(&drm->colorspace, color))
-        return false;
-
-    // Set to sdr if the display doesn't support the colorspace.
-    if (!vo_drm_color_supported_by_display(drm, *color)) {
-        *color = pl_color_space_srgb;
-        pl_color_space_infer(color);
-    }
-
-    destroy_hdr_blob(drm);
-    drm->colorspace = *color;
-
-    // For any HDR, the BT2020 drm colorspace is the only one that works in practice.
-    struct drm_atomic_context *atomic_ctx = drm->atomic_context;
-    int colorspace = pl_color_space_is_hdr(color) || pl_color_primaries_is_wide_gamut(color->primaries) ?
-                     DRM_MODE_COLORIMETRY_BT2020_RGB : DRM_MODE_COLORIMETRY_DEFAULT;
-    drm_object_set_property(atomic_ctx->request, atomic_ctx->connector, "Colorspace", colorspace);
-
     const struct pl_hdr_metadata *hdr = &color->hdr;
-    struct hdr_output_metadata metadata = {
+    return (struct hdr_output_metadata) {
         .metadata_type = HDMI_STATIC_METADATA_TYPE1,
         .hdmi_metadata_type1.metadata_type = HDMI_STATIC_METADATA_TYPE1,
 
@@ -1414,6 +1395,30 @@ bool vo_drm_set_color(struct vo *vo, struct pl_color_space *color)
         .hdmi_metadata_type1.max_cll = hdr->max_cll,
         .hdmi_metadata_type1.max_fall = hdr->max_fall,
     };
+}
+
+bool vo_drm_set_color(struct vo *vo, struct pl_color_space *color)
+{
+    struct vo_drm_state *drm = vo->drm;
+    if (pl_color_space_equal(&drm->colorspace, color))
+        return false;
+
+    // Set to sdr if the display doesn't support the colorspace.
+    if (!vo_drm_color_supported_by_display(drm, *color)) {
+        *color = pl_color_space_srgb;
+        pl_color_space_infer(color);
+    }
+
+    destroy_hdr_blob(drm);
+    drm->colorspace = *color;
+
+    // For any HDR, the BT2020 drm colorspace is the only one that works in practice.
+    struct drm_atomic_context *atomic_ctx = drm->atomic_context;
+    int colorspace = pl_color_space_is_hdr(color) || pl_color_primaries_is_wide_gamut(color->primaries) ?
+                     DRM_MODE_COLORIMETRY_BT2020_RGB : DRM_MODE_COLORIMETRY_DEFAULT;
+    drm_object_set_property(atomic_ctx->request, atomic_ctx->connector, "Colorspace", colorspace);
+
+    struct hdr_output_metadata metadata = vo_drm_hdr_output_metadata(color);
     drmModeCreatePropertyBlob(drm->fd, &metadata, sizeof(metadata), &drm->hdr.blob_id);
     drm_object_set_property(atomic_ctx->request, atomic_ctx->connector, "HDR_OUTPUT_METADATA", drm->hdr.blob_id);
     return true;

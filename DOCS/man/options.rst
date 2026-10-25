@@ -7411,7 +7411,10 @@ them.
     current display parameters are known. Currently, this is supported on
     Wayland, D3D11 and winvk contexts. The ``yes`` option will always try to set
     the colorspace, you may need to adjust the ``--target-*`` options to match
-    your display capabilities.
+    your display capabilities. On X11, ``yes`` enables HDR passthrough while
+    the window is fullscreen on outputs whose ``HDR`` and ``HDR capable``
+    RandR properties are 1, if the X server offers a 30-bit visual and applies
+    the ``hdr_output_metadata`` window property to the monitor.
     Requires a supporting driver and ``--vo=gpu-next``. (Default: ``auto``)
 
     .. note::
