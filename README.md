@@ -57,6 +57,31 @@ operating systems, but development is not done with them in mind. Keeping
 compatibility with such setups is not guaranteed. If things work, consider it
 a happy accident.
 
+## HDR on X11
+
+This build can play HDR video on X11 with an X server that supports HDR
+through the `HDR` and `HDR capable` RandR output properties and the
+`hdr_output_metadata` window property. The X server also has to offer a 30-bit
+visual. Both the Vulkan and the OpenGL (EGL) backends are supported.
+
+Enable HDR on the monitor first:
+
+    xrandr --output DP-1 --set HDR 1
+
+Then run mpv with `--vo=gpu-next` and `--target-colorspace-hint=yes`:
+
+    mpv --vo=gpu-next --target-colorspace-hint=yes video.mkv
+
+To make this the default, add the options to `~/.config/mpv/mpv.conf`:
+
+    vo=gpu-next
+    target-colorspace-hint=yes
+
+The video is only sent as HDR while the window is fullscreen on monitors that
+have HDR enabled. In a window, or on monitors without HDR, mpv tone maps it to
+SDR. Don't enable the X11 HDR Vulkan layer (`ENABLE_HDR_WSI=1`) for mpv,
+since mpv sets the HDR metadata itself.
+
 ## Downloads
 
 
