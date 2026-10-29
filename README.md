@@ -77,9 +77,11 @@ To make this the default, add the options to `~/.config/mpv/mpv.conf`:
     vo=gpu-next
     target-colorspace-hint=yes
 
-The video is only sent as HDR while the window is fullscreen on monitors that
-have HDR enabled. In a window, or on monitors without HDR, mpv tone maps it to
-SDR. Don't enable the X11 HDR Vulkan layer (`ENABLE_HDR_WSI=1`) for mpv,
+The video is sent as HDR, fullscreen or in a window, while every monitor the
+window is on has HDR enabled. Otherwise mpv tone maps it to SDR. HDR in a
+window needs an X server that composites HDR windows, such as
+[this Xorg fork](https://github.com/dec05eba/xserver) with per-monitor
+framebuffers enabled (the default). Don't enable the X11 HDR Vulkan layer (`ENABLE_HDR_WSI=1`) for mpv,
 since mpv sets the HDR metadata itself.
 
 ## Downloads

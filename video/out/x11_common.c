@@ -2144,15 +2144,15 @@ static bool vo_x11_window_on_hdr_displays(struct vo_x11_state *x11)
     return on_display;
 }
 
-// The X server applies the hdr_output_metadata window property to the monitor
-// while the window covers it fullscreen and HDR is enabled on the monitor.
+// The X server shows a window with the hdr_output_metadata property as HDR on
+// monitors that have HDR enabled.
 bool vo_x11_set_color(struct vo *vo, struct mp_image_params *params)
 {
 #if HAVE_DRM
     struct vo_x11_state *x11 = vo->x11;
     struct pl_color_space color = {0};
 
-    if (params && x11->fs && x11->window_depth == 30 &&
+    if (params && x11->window_depth == 30 &&
         pl_color_transfer_is_hdr(params->color.transfer) &&
         vo_x11_window_on_hdr_displays(x11))
     {
