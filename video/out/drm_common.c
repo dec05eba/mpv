@@ -1397,6 +1397,31 @@ struct hdr_output_metadata vo_drm_hdr_output_metadata(const struct pl_color_spac
     };
 }
 
+struct pl_color_space vo_drm_hdr_color_space(const struct hdr_output_metadata *metadata)
+{
+    const struct hdr_metadata_infoframe *info = &metadata->hdmi_metadata_type1;
+    return (struct pl_color_space) {
+        .primaries = PL_COLOR_PRIM_BT_2020,
+        .transfer = PL_COLOR_TRC_PQ,
+        .hdr = {
+            .prim = {
+                .red = { info->display_primaries[0].x / (float)DRM_PRIM_FACTOR,
+                         info->display_primaries[0].y / (float)DRM_PRIM_FACTOR },
+                .green = { info->display_primaries[1].x / (float)DRM_PRIM_FACTOR,
+                           info->display_primaries[1].y / (float)DRM_PRIM_FACTOR },
+                .blue = { info->display_primaries[2].x / (float)DRM_PRIM_FACTOR,
+                          info->display_primaries[2].y / (float)DRM_PRIM_FACTOR },
+                .white = { info->white_point.x / (float)DRM_PRIM_FACTOR,
+                           info->white_point.y / (float)DRM_PRIM_FACTOR },
+            },
+            .min_luma = info->min_display_mastering_luminance / (float)DRM_MIN_LUMA_FACTOR,
+            .max_luma = info->max_display_mastering_luminance,
+            .max_cll = info->max_cll,
+            .max_fall = info->max_fall,
+        },
+    };
+}
+
 bool vo_drm_set_color(struct vo *vo, struct pl_color_space *color)
 {
     struct vo_drm_state *drm = vo->drm;

@@ -78,7 +78,10 @@ To make this the default, add the options to `~/.config/mpv/mpv.conf`:
     target-colorspace-hint=yes
 
 The video is sent as HDR, fullscreen or in a window, while every monitor the
-window is on has HDR enabled. Otherwise mpv tone maps it to SDR. HDR in a
+window is on has HDR enabled. Otherwise mpv tone maps it to SDR. When the X
+server reports the monitor's peak brightness and colors through the
+`HDR output metadata` RandR output property, mpv fits the video to the monitor
+itself, like it does with a Wayland compositor. HDR in a
 window needs an X server that composites HDR windows, such as
 [this Xorg fork](https://github.com/dec05eba/xserver) with per-monitor
 framebuffers enabled (the default). Don't enable the X11 HDR Vulkan layer (`ENABLE_HDR_WSI=1`) for mpv,

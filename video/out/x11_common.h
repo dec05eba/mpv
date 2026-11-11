@@ -46,6 +46,7 @@ struct xrandr_display {
     char *name;
     bool overlaps;
     bool hdr;
+    struct pl_color_space hdr_csp;
     int atom_id; // offset by location of primary
     int screen;
 };
@@ -156,6 +157,7 @@ bool vo_x11_create_vo_window(struct vo *vo, XVisualInfo *vis,
 void vo_x11_config_vo_window(struct vo *vo);
 bool vo_x11_check_visible(struct vo *vo);
 bool vo_x11_set_color(struct vo *vo, struct mp_image_params *params);
+struct pl_color_space vo_x11_preferred_csp(struct vo *vo);
 int vo_x11_control(struct vo *vo, int *events, int request, void *arg);
 void vo_x11_present(struct vo *vo);
 void vo_x11_sync_swap(struct vo *vo);

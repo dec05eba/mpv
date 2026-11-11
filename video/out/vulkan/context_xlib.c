@@ -37,6 +37,11 @@ static bool xlib_set_color(struct ra_ctx *ctx, struct mp_image_params *params)
     return vo_x11_set_color(ctx->vo, params);
 }
 
+static pl_color_space_t xlib_preferred_csp(struct ra_ctx *ctx)
+{
+    return vo_x11_preferred_csp(ctx->vo);
+}
+
 static void xlib_vk_swap_buffers(struct ra_ctx *ctx)
 {
     if (ctx->vo->x11->use_present)
@@ -85,6 +90,7 @@ static bool xlib_init(struct ra_ctx *ctx)
     struct ra_ctx_params params = {
         .check_visible = xlib_check_visible,
         .set_color = xlib_set_color,
+        .preferred_csp = xlib_preferred_csp,
         .swap_buffers = xlib_vk_swap_buffers,
         .get_vsync = xlib_vk_get_vsync,
     };

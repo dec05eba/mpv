@@ -81,6 +81,11 @@ static bool mpegl_set_color(struct ra_ctx *ctx, struct mp_image_params *params)
     return vo_x11_set_color(ctx->vo, params);
 }
 
+static pl_color_space_t mpegl_preferred_csp(struct ra_ctx *ctx)
+{
+    return vo_x11_preferred_csp(ctx->vo);
+}
+
 static void mpegl_swap_buffers(struct ra_ctx *ctx)
 {
     struct priv *p = ctx->priv;
@@ -171,6 +176,7 @@ static bool mpegl_init(struct ra_ctx *ctx)
     struct ra_ctx_params params = {
         .check_visible = mpegl_check_visible,
         .set_color = mpegl_set_color,
+        .preferred_csp = mpegl_preferred_csp,
         .swap_buffers = mpegl_swap_buffers,
         .get_vsync    = mpegl_get_vsync,
     };

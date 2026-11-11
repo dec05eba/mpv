@@ -440,6 +440,42 @@ static bool xrandr_output_hdr_enabled(struct vo_x11_state *x11, RROutput output)
            xrandr_output_flag(x11, output, "HDR capable");
 }
 
+// The X server reports the HDR metadata it sends to the monitor, with the
+// monitor's peak luminance and primaries.
+static struct pl_color_space xrandr_output_hdr_csp(struct vo_x11_state *x11,
+                                                   RROutput output)
+{
+    struct pl_color_space csp = {0};
+#if HAVE_DRM
+    Atom property = XInternAtom(x11->display, "HDR output metadata", True);
+    struct hdr_output_metadata metadata;
+    Atom type;
+    int format;
+    unsigned long nitems, bytes_after;
+    unsigned char *data = NULL;
+
+    if (property == None)
+        return csp;
+
+    if (XRRGetOutputProperty(x11->display, output, property, 0,
+                             (sizeof(metadata) + 3) / 4, False, False,
+                             XA_CARDINAL, &type, &format, &nitems, &bytes_after,
+                             &data) == Success &&
+        format == 8 && nitems == sizeof(metadata))
+    {
+        memcpy(&metadata, data, sizeof(metadata));
+        if (metadata.hdmi_metadata_type1.max_cll) {
+            csp = vo_drm_hdr_color_space(&metadata);
+            // Monitors often don't reach the black level their EDID reports.
+            csp.hdr.min_luma = 0;
+        }
+    }
+
+    XFree(data);
+#endif
+    return csp;
+}
+
 static void xrandr_read(struct vo_x11_state *x11)
 {
     for(int i = 0; i < x11->num_displays; i++)
@@ -516,11 +552,13 @@ static void xrandr_read(struct vo_x11_state *x11)
                     .fps = m.dotClock / (m.hTotal * vTotal),
                     .name = talloc_strdup(x11, out->name),
                     .hdr = xrandr_output_hdr_enabled(x11, output),
+                    .hdr_csp = xrandr_output_hdr_csp(x11, output),
                 };
                 int num = x11->num_displays++;
-                MP_VERBOSE(x11, "Display %d (%s): [%d, %d, %d, %d] @ %f FPS%s\n",
+                MP_VERBOSE(x11, "Display %d (%s): [%d, %d, %d, %d] @ %f FPS%s, "
+                           "HDR peak %.0f nits\n",
                            num, d.name, d.rc.x0, d.rc.y0, d.rc.x1, d.rc.y1, d.fps,
-                           d.hdr ? ", HDR" : "");
+                           d.hdr ? ", HDR" : "", d.hdr_csp.hdr.max_luma);
                 x11->displays[num] = d;
                 if (output == primary)
                     primary_id = num;
@@ -2185,6 +2223,22 @@ bool vo_x11_set_color(struct vo *vo, struct mp_image_params *params)
 #else
     return false;
 #endif
+}
+
+// HDR video is fitted to the monitor the window is on, instead of being fitted
+// by the X server. SDR video stays SDR so it's shown at the SDR white level
+// of the X server.
+struct pl_color_space vo_x11_preferred_csp(struct vo *vo)
+{
+    struct vo_x11_state *x11 = vo->x11;
+
+    if (!vo->params || !pl_color_transfer_is_hdr(vo->params->color.transfer) ||
+        x11->window_depth != 30 || x11->current_screen < 0 ||
+        x11->current_screen >= x11->num_displays ||
+        !vo_x11_window_on_hdr_displays(x11))
+        return (struct pl_color_space){0};
+
+    return x11->displays[x11->current_screen].hdr_csp;
 }
 
 static void vo_x11_set_input_region(struct vo *vo, bool passthrough)
